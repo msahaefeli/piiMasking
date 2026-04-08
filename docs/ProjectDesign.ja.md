@@ -34,7 +34,7 @@
 - トランジェント判定例: `HttpRequestException`, `RequestFailedException`（5xx/429）, タイムアウト
 - 非同期 Analyze Actions: 大きなトランスクリプトに対応するため、Text Analytics の長時間実行（Analyze Actions）API を使用して PII 検出を非同期で実行します。これによりクライアント側でのチャンク分割を原則不要にしています（サービス側の非同期上限に依存）。
 - マージポリシー: 非同期 API から得られた検出結果を正規化・重複除去して、重複や重なりを解消したエンティティに統合します。カテゴリが異なる場合は `カテゴリA/カテゴリB` のように連結することがあります。
-- 設定可能項目（環境変数）: `PII_RETRY_MAX_COUNT`, `PII_RETRY_BASE_DELAY_MS`, `PII_RETRY_MAX_DELAY_MS`
+- 設定可能項目（環境変数）: `PII_RETRY_MAX_COUNT`, `PII_RETRY_BASE_DELAY_MS`, `PII_RETRY_MAX_DELAY_MS`, およびマスク対象カテゴリを指定する `PII_MASK_CATEGORIES`（カンマ区切り）
 - マスキングはオフセットを保持するため末尾から実行
 
 7) 環境・設定
