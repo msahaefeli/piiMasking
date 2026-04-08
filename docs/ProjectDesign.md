@@ -34,7 +34,9 @@ Project Design Document
 - Transient detection: `HttpRequestException`, `Azure.RequestFailedException` with 5xx/429, timeouts
 - Asynchronous Analyze Actions: To support very large transcripts the function uses the Text Analytics long-running Analyze Actions API (`StartAnalyzeActionsAsync`) to perform PII recognition in async mode, which supports much larger documents (service async limits). This avoids client-side chunking for most scenarios.
 - Merge policy: Detections from the async action are normalized and deduplicated; overlapping detections are merged into coherent, non-overlapping entities. When categories differ, categories may be concatenated (e.g. `Person/Location`).
-- Configurable via env vars: `PII_RETRY_MAX_COUNT`, `PII_RETRY_BASE_DELAY_MS`, `PII_RETRY_MAX_DELAY_MS`, and `PII_MASK_CATEGORIES` (comma-separated list of categories to mask).
+-- Configurable via env vars: `PII_RETRY_MAX_COUNT`, `PII_RETRY_BASE_DELAY_MS`, `PII_RETRY_MAX_DELAY_MS`, and `PII_MASK_CATEGORIES` (comma-separated list of categories to mask).
+
+Note: The function defaults to masking only highly sensitive identifiers that typically should not be stored in a corporate CRM for B2B insurance sales (credit card numbers, national IDs, bank account numbers, passports, driver licenses, IP addresses, URLs). Contact fields such as `Person`, `PhoneNumber`, `Email`, and `Address` are left unmasked by default to support CRM workflows. Change `PII_MASK_CATEGORIES` to alter behavior.
 - Keep masking logic deterministic; mask from end to start to preserve offsets
 
 7) Environment & Configuration

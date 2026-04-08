@@ -123,16 +123,19 @@ namespace test.CommonFunctions.AzureFunction.PiiMasking
             }
             else
             {
+                // Default: mask highly sensitive identifiers that typically should NOT be stored in a CRM
+                // for B2B insurance sales (keep contactable fields such as Person, PhoneNumber, Email, Address
+                // available to CRM by default). Adjust via PII_MASK_CATEGORIES as needed.
                 allowedMaskCategories = new HashSet<string>(new[]
                 {
-                    "Person",
-                    "PhoneNumber",
-                    "Email",
-                    "Address",
-                    "DateTime",
-                    "IPAddress",
-                    "USSocialSecurityNumber",
                     "CreditCardNumber",
+                    "USSocialSecurityNumber",
+                    "JPMyNumberPersonal",
+                    "BankAccountNumber",
+                    "IBAN",
+                    "PassportNumber",
+                    "DriverLicenseNumber",
+                    "IPAddress",
                     "URL",
                     "Url"
                 }, System.StringComparer.OrdinalIgnoreCase);
