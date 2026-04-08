@@ -32,10 +32,9 @@ Project Design Document
 6) Key design decisions
 - Retry strategy: exponential backoff + jitter; transient-only retries; `CancellationToken` aware
 - Transient detection: `HttpRequestException`, `Azure.RequestFailedException` with 5xx/429, timeouts
-- Chunking: Large transcripts are automatically split into chunks to respect Text Analytics document size limits. Chunking is aligned to sentence/phrase boundaries where possible to reduce boundary splitting of entities.
-- Overlap: Chunks include a configurable overlap to capture entities that cross chunk boundaries; overlaps are later de-duplicated.
-- Merge policy: Collected entity detections from chunks are merged into coherent, non-overlapping entities. Overlapping detections are merged and, when categories differ, categories may be concatenated (e.g. `Person/Location`).
-- Configurable via env vars: `PII_RETRY_MAX_COUNT`, `PII_RETRY_BASE_DELAY_MS`, `PII_RETRY_MAX_DELAY_MS`, `PII_CHUNK_MAX_SIZE`, `PII_CHUNK_OVERLAP`
+- Asynchronous Analyze Actions: To support very large transcripts the function uses the Text Analytics long-running Analyze Actions API (`StartAnalyzeActionsAsync`) to perform PII recognition in async mode, which supports much larger documents (service async limits). This avoids client-side chunking for most scenarios.
+- Merge policy: Detections from the async action are normalized and deduplicated; overlapping detections are merged into coherent, non-overlapping entities. When categories differ, categories may be concatenated (e.g. `Person/Location`).
+- Configurable via env vars: `PII_RETRY_MAX_COUNT`, `PII_RETRY_BASE_DELAY_MS`, `PII_RETRY_MAX_DELAY_MS`
 - Keep masking logic deterministic; mask from end to start to preserve offsets
 
 7) Environment & Configuration

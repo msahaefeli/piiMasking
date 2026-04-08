@@ -6,7 +6,7 @@ Key architectural points:
 
 - Azure Function (HTTP Trigger): accepts POST requests with `{ "transcript": "..." }` and returns `{ maskedTranscript, entities }`.
 - Azure Text Analytics - PII recognition: used to detect PII entities per text chunk.
-- Chunking layer: large transcripts are split into chunks aligned to sentence boundaries (punctuation/line breaks) to avoid hitting Text Analytics document size limits. Chunks include a configurable overlap to capture entities crossing boundaries.
+- Asynchronous Analyze Actions: large transcripts are sent to the Text Analytics long-running Analyze Actions API (`StartAnalyzeActionsAsync`) which supports processing much larger single documents in async mode. This removes the need for client-side chunking in common cases.
 - Retry and resilience: calls to Text Analytics are wrapped with a retry utility (`FunctionBaseRetry`) using exponential backoff and transient detection (5xx/429). Retry parameters are configurable via environment variables.
 - Merge/aggregation: detections collected per-chunk are converted to absolute offsets, deduplicated and merged into coherent, non-overlapping entities before masking.
 - Masking: masking is applied deterministically from end-to-start using the merged offsets to preserve correctness of offsets.
