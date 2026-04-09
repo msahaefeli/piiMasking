@@ -1,6 +1,6 @@
-# Decisions
+# 決定事項
 
-- Use Azure Text Analytics PII recognition to detect PII entities.
-- Mask detected entities by replacing characters with `*` to preserve offsets/lengths.
-- Keep shared utilities in `FunctionBase.cs` and instantiate it inside the function to reuse common logic.
-- Project targets .NET 6 and Azure Functions v4.
+- PII 検出には Azure Text Analytics の PII 認識機能を利用する。
+- 検出されたエンティティは `*` で置換してマスクし、元のオフセットや長さを保つ。
+- 共有ユーティリティは `FunctionBase.cs` にまとめ、関数から再利用することで重複を避ける。
+- プロジェクトは .NET 6 と Azure Functions v4 を対象とする。
