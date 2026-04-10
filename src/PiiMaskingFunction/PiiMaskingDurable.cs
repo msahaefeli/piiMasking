@@ -97,8 +97,6 @@ namespace test.CommonFunctions.AzureFunction.PiiMasking
             var transcript = input.Transcript;
             var output = new AnalyzeActivityOutput { OperationId = instanceId };
 
-            var start = System.Diagnostics.Stopwatch.StartNew();
-
             try
             {
                 // TextAnalyticsクライアントを作成
@@ -117,9 +115,8 @@ namespace test.CommonFunctions.AzureFunction.PiiMasking
                 // 共通サービスを使用してマスキング処理
                 var result = PiiMaskingService.ProcessMasking(transcript, detectedEntities);
 
-                start.Stop();
-                log.LogInformation("PiiMasking completed for instance {InstanceId} in {ElapsedMs}ms, detected {EntityCount} entities",
-                    instanceId, start.ElapsedMilliseconds, result.Entities.Count);
+                log.LogInformation("PiiMasking completed for instance {InstanceId}",
+                    instanceId);
 
                 // 結果を設定
                 output.MaskedTranscript = result.MaskedTranscript;
@@ -144,10 +141,8 @@ namespace test.CommonFunctions.AzureFunction.PiiMasking
             }
             catch (Exception ex)
             {
-                start.Stop();
                 log.LogError(ex, "Durable analyze actions failed for instance {InstanceId}", instanceId);
-                output.Error = ex.Message;
-                output.ProcessingTimeMs = start.ElapsedMilliseconds;
+                output.Error = ex.Message;;
                 return output;
             }
         }

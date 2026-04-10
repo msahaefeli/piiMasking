@@ -23,8 +23,7 @@ Azure AI Language (Text Analytics) を使用して、日本の法人向け保険営業の CRM 用途
 │   └── PiiMaskingFunction/
 │       ├── FunctionBase.cs       # 共通サービス、リトライ、データモデル
 │       ├── PiiMaskingDurable.cs  # Durable Functions エントリポイント
-│       ├── host.json             # Azure Functions 設定
-│       └── local.settings.json   # ローカル環境変数
+│       └──host.json             # Azure Functions 設定
 └── tests/            # ユニット・統合テスト
 ```
 
@@ -35,29 +34,6 @@ Azure AI Language (Text Analytics) を使用して、日本の法人向け保険営業の CRM 用途
 - .NET 6.0 SDK
 - Azure Functions Core Tools v4
 - Azure AI Language リソース
-
-### ローカル実行
-
-1. `src/PiiMaskingFunction/local.settings.json` を設定:
-
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "dotnet",
-    "TEXT_ANALYTICS_ENDPOINT": "https://your-resource.cognitiveservices.azure.com/",
-    "TEXT_ANALYTICS_KEY": "your-api-key"
-  }
-}
-```
-
-2. Azure Functions を起動:
-
-```bash
-cd src/PiiMaskingFunction
-func start
-```
 
 ## API リファレンス
 
@@ -179,10 +155,6 @@ dotnet test tests/PiiMaskingFunction.Tests
 
 # 統合テスト（Azure AI Language への接続が必要）
 dotnet test tests/PiiMaskingFunction.Tests
-
----
-
-注意: 最近の変更に伴い、クレジットカード番号のヒューリスティック検出（`DetectCreditCardCandidates`）はソースから削除されました。現在は Azure AI Language による PII 検出結果と、設定されたマスクポリシー（環境変数 `PII_MASK_CATEGORIES`）に基づいてマスキング処理を行います。
 
 統合／E2E テストについては、複数カテゴリを個別に確認するケースと、すべての PII 種類を1つの入力に含める結合ケースの両方を含むように更新しました。ライブサービスを使ったテストを実行する場合は、`src/PiiMaskingFunction/local.settings.json` または環境変数に `TEXT_ANALYTICS_ENDPOINT` と `TEXT_ANALYTICS_KEY` を設定してください。
 ```

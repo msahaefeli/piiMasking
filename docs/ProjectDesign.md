@@ -8,7 +8,6 @@
 2) 範囲
 - コア: `src/PiiMaskingFunction`（Azure Functions v4 / .NET 6）
 - 外部連携: Azure AI Language (`Azure.AI.TextAnalytics`)
-- ローカル開発: Azure Functions Core Tools、`local.settings.json` による環境変数上書き
 
 3) 技術スタック
 - プラットフォーム: .NET 6, Azure Functions v4, Durable Functions
@@ -18,7 +17,6 @@
 4) プロジェクト構成（主要）
 - `src/PiiMaskingFunction/PiiMaskingDurable.cs` ? Durable Functions HTTPトリガー、オーケストレーター、アクティビティ、ステータス確認
 - `src/PiiMaskingFunction/FunctionBase.cs` ? 共通サービス（PiiMaskingService）、リトライユーティリティ（FunctionBaseRetry）、データモデル（PiiEntity, MaskingResult）
-- `src/PiiMaskingFunction/local.settings.json` ? ローカル用環境変数（機密はコミットしない）
 - `tests/` ? 単体・統合・E2E テスト
 
 5) 高レベルデータフロー（Durable Functions）
@@ -94,7 +92,6 @@
 - 推奨ツール: Application Insights（アラート・ダッシュボード）
 
 10) セキュリティ
-- シークレットは Key Vault やアプリ設定で管理。`local.settings.json` は共有・コミット禁止
 - ログに PII を出力しない（必要ならマスクしてから記録）
 
 11) テスト

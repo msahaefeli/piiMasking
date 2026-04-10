@@ -313,35 +313,6 @@ namespace test.CommonFunctions.AzureFunction.PiiMasking.Internal
 
         #endregion
 
-        #region クレジットカード検出
-
-        /// <summary>
-        /// クレジットカード番号のLuhnチェック
-        /// </summary>
-        public static bool IsLikelyCreditCard(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return false;
-            var cleaned = new string((text ?? string.Empty).Where(c => char.IsDigit(c)).ToArray());
-            if (cleaned.Length < 13 || cleaned.Length > 19) return false;
-
-            int sum = 0;
-            bool alt = false;
-            for (int i = cleaned.Length - 1; i >= 0; i--)
-            {
-                int n = cleaned[i] - '0';
-                if (alt)
-                {
-                    n *= 2;
-                    if (n > 9) n -= 9;
-                }
-                sum += n;
-                alt = !alt;
-            }
-            return (sum % 10) == 0;
-        }
-
-        #endregion
-
         #region マスキング処理
 
         /// <summary>
