@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="4.5.0" />
+    <PackageReference Include="Azure.AI.TextAnalytics" Version="5.3.0" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.0.0" />
+    <PackageReference Include="Azure.Core" Version="1.45.0" />
+    <PackageReference Include="Azure.Storage.Queues" Version="12.11.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.17.0" />
+    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.DurableTask" Version="2.7.0" />
+    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage" Version="5.0.0" />
+    <PackageReference Include="Microsoft.ApplicationInsights" Version="2.20.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="host.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="local.settings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Ensure medical_terms.txt is embedded in the assembly so runtime can fall back to the resource when file system lookup fails -->
+    <EmbeddedResource Include="medical_terms.txt" />
+    <!-- Also copy to output to aid tests that expect the file next to the binary -->
+    <None Update="medical_terms.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Ensure medical_terms.txt is written in UTF-8 with BOM during build to avoid runtime mojibake on some hosts -->
+  <Target Name="EnsureMedicalTermsUtf8Bom" BeforeTargets="PrepareResources">
+    <ReadLinesFromFile File="$(ProjectDir)medical_terms.txt">
+      <Output TaskParameter="Lines" ItemName="MedicalLines" />
+    </ReadLinesFromFile>
+    <WriteLinesToFile File="$(ProjectDir)medical_terms.txt" Lines="@(MedicalLines)" Overwrite="true" Encoding="UTF-8" WriteOnlyWhenDifferent="true" />
+  </Target>
+
+</Project>
