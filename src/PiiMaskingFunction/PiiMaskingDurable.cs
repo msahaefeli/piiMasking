@@ -1,5 +1,7 @@
 using System;
 using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
@@ -14,13 +16,13 @@ using test.CommonFunctions.AzureFunction.PiiMasking.Internal;
 namespace test.CommonFunctions.AzureFunction.PiiMasking
 {
     /// <summary>
-    /// Durable Functionsを使用した非同期PIIマスキング処理
-    /// Azure AI Languageへのリクエスト送信後、ステータスと結果の監視を別のFunctionで実施
+    /// Durable Functionsを使用した非同期VTTマスキング処理
+    /// Azure OpenAI APIを使用してVTTファイルからPIIと医療情報をマスキングします
     /// </summary>
     public static class PiiMaskingDurable
     {
         /// <summary>
-        /// 非同期PIIマスキング処理を開始するHTTPトリガー
+        /// VTTマスキング処理を開始するHTTPトリガー
         /// POST /api/maskpii
         /// </summary>
         [FunctionName("PiiMasking_HttpStart")]
@@ -29,23 +31,33 @@ namespace test.CommonFunctions.AzureFunction.PiiMasking
             [DurableClient] IDurableClient starter,
             ILogger log)
         {
+            // リクエストボディをバッファリング（複数回読み取り可能にする）
+            req.EnableBuffering();
+
+            // リクエストボディを読み取り
             string requestBody;
-            using (var sr = new System.IO.StreamReader(req.Body)) requestBody = await sr.ReadToEndAsync();
+            using (var reader = new System.IO.StreamReader(req.Body, System.Text.Encoding.UTF8, leaveOpen: true))
+            {
+                requestBody = await reader.ReadToEndAsync();
+            }
+
+            // ストリームをリセット（念のため）
+            req.Body.Position = 0;
 
             if (string.IsNullOrWhiteSpace(requestBody))
             {
                 return new BadRequestObjectResult(new { error = "Request body is empty" });
             }
 
-            // トランスクリプトを解析
-            string? transcript = PiiMaskingService.ParseTranscript(requestBody);
-            if (string.IsNullOrWhiteSpace(transcript))
+            // VTTコンテンツを解析
+            string? vttContent = PiiMaskingService.ParseTranscript(requestBody);
+            if (string.IsNullOrWhiteSpace(vttContent))
             {
-                return new BadRequestObjectResult(new { error = "No transcript provided" });
+                return new BadRequestObjectResult(new { error = "No VTT content provided" });
             }
 
             // 入力バリデーション
-            var validation = PiiMaskingService.ValidateTranscript(transcript);
+            var validation = PiiMaskingService.ValidateTranscript(vttContent);
             if (!validation.IsValid)
             {
                 return new BadRequestObjectResult(new { error = validation.ErrorMessage });
@@ -57,36 +69,50 @@ namespace test.CommonFunctions.AzureFunction.PiiMasking
                 log.LogWarning(validation.WarningMessage);
             }
 
-            var instanceId = await starter.StartNewAsync("PiiMasking_Orchestrator", transcript);
-            log.LogInformation("Started PiiMasking durable orchestrator with ID = '{InstanceId}', transcript length = {Length}.",
-                instanceId, transcript.Length);
+            // オーケストレーションを開始（インスタンスIDは自動生成、inputとしてvttContentを渡す）
+            var instanceId = await starter.StartNewAsync("PiiMasking_Orchestrator", input: vttContent);
+            log.LogInformation("Started VTT masking orchestrator with ID = '{InstanceId}', VTT length = {Length}.",
+                instanceId, vttContent.Length);
 
             return starter.CreateCheckStatusResponse(req, instanceId);
         }
 
         /// <summary>
-        /// オーケストレーター: PIIマスキング処理を調整
+        /// オーケストレーター: VTTマスキング処理を調整
         /// </summary>
         [FunctionName("PiiMasking_Orchestrator")]
         public static async Task<AnalyzeActivityOutput> Orchestrator([OrchestrationTrigger] IDurableOrchestrationContext context)
         {
-            var transcript = context.GetInput<string>() ?? string.Empty;
+            var vttContent = context.GetInput<string>() ?? string.Empty;
             var instanceId = context.InstanceId;
 
             // 型安全な入力オブジェクトを作成
             var input = new AnalyzeActivityInput
             {
                 InstanceId = instanceId,
-                Transcript = transcript
+                Transcript = vttContent
             };
 
-            // アクティビティを呼び出してPII検出とマスキングを実行
+            // アクティビティを呼び出してVTTマスキングを実行
             var result = await context.CallActivityAsync<AnalyzeActivityOutput>("PiiMasking_RunAnalyze", input);
+
+            // オーケストレーター側でログ（注: リプレイ時は複数回実行される可能性あり）
+            if (!context.IsReplaying)
+            {
+                // 注: オーケストレーター内では通常のログは使えないため、カスタムステータスに設定
+                context.SetCustomStatus(new
+                {
+                    MaskedLength = result?.MaskedTranscript?.Length ?? 0,
+                    ProcessingTime = result?.ProcessingTimeMs ?? 0,
+                    HasError = !string.IsNullOrEmpty(result?.Error)
+                });
+            }
+
             return result;
         }
 
         /// <summary>
-        /// アクティビティ: Azure AI Language APIを呼び出してPII検出とマスキングを実行
+        /// アクティビティ: Azure OpenAI APIを呼び出してVTTファイルをマスキング
         /// </summary>
         [FunctionName("PiiMasking_RunAnalyze")]
         public static async Task<AnalyzeActivityOutput> RunAnalyze(
@@ -94,55 +120,86 @@ namespace test.CommonFunctions.AzureFunction.PiiMasking
             ILogger log)
         {
             var instanceId = input.InstanceId;
-            var transcript = input.Transcript;
+            var vttContent = input.Transcript;
             var output = new AnalyzeActivityOutput { OperationId = instanceId };
 
             try
             {
-                // TextAnalyticsクライアントを作成
-                var client = PiiMaskingService.CreateTextAnalyticsClient();
-                if (client == null)
+                var start = System.Diagnostics.Stopwatch.StartNew();
+
+                log.LogInformation("Starting VTT masking for instance {InstanceId}, VTT length: {Length}", 
+                    instanceId, vttContent?.Length ?? 0);
+
+                // Azure OpenAIを使用してVTTマスキング実行
+                var maskedVtt = await PiiMaskingService.MaskVttAsync(vttContent, log);
+
+                log.LogInformation("VTT masking completed for instance {InstanceId}. Result length: {ResultLength}", 
+                    instanceId, maskedVtt?.Length ?? 0);
+
+                // デバッグ: 結果の先頭を確認
+                if (!string.IsNullOrEmpty(maskedVtt))
                 {
-                    log.LogError("Text Analytics credentials not configured for durable activity");
-                    output.Error = "Text Analytics credentials not configured";
-                    return output;
+                    var preview = maskedVtt.Substring(0, Math.Min(100, maskedVtt.Length));
+                    log.LogInformation("Masked VTT preview: {Preview}", preview);
+                }
+                else
+                {
+                    log.LogWarning("Masked VTT is null or empty!");
                 }
 
-                // 共通サービスを使用してPII検出（リトライ機能付き）
-                var detectedEntities = await PiiMaskingService.DetectPiiEntitiesAsync(
-                    client, transcript, log, CancellationToken.None);
-
-                // 共通サービスを使用してマスキング処理
-                var result = PiiMaskingService.ProcessMasking(transcript, detectedEntities);
-
-                log.LogInformation("PiiMasking completed for instance {InstanceId}",
-                    instanceId);
-
                 // 結果を設定
-                output.MaskedTranscript = result.MaskedTranscript;
-                output.Entities = result.Entities.Select(e => new PiiEntityDto
+                output.MaskedTranscript = maskedVtt ?? string.Empty;
+
+                // Base64エンコード（文字化け回避）
+                if (!string.IsNullOrEmpty(maskedVtt))
                 {
-                    Category = e.Category,
-                    SubCategory = e.SubCategory,
-                    Text = e.Text,
-                    Offset = e.Offset,
-                    Length = e.Length
-                }).ToList();
-                output.MaskCategoriesEnv = result.MaskCategoriesEnv;
-                output.MaskCategoriesUsed = result.MaskCategoriesUsed;
-                output.MaskOffsets = result.MaskOffsets.Select(o => new MaskOffsetDto
+                    var bytes = Encoding.UTF8.GetBytes(maskedVtt);
+                    output.MaskedTranscriptBase64 = Convert.ToBase64String(bytes);
+                    log.LogInformation("Base64 encoded length: {Length}", output.MaskedTranscriptBase64.Length);
+                }
+
+                // Azure Storageへアップロード（オプション）
+                var storageConnectionString = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING");
+                var storageContainer = Environment.GetEnvironmentVariable("STORAGE_CONTAINER_NAME") ?? "masked-vtt";
+
+                if (!string.IsNullOrEmpty(storageConnectionString) && !string.IsNullOrEmpty(maskedVtt))
                 {
-                    Offset = o.offset,
-                    Length = o.length
-                }).ToList();
+                    try
+                    {
+                        var blobName = $"masked_{instanceId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.vtt";
+                        var blobUrl = await PiiMaskingService.UploadToAzureStorageAsync(
+                            storageConnectionString,
+                            storageContainer,
+                            blobName,
+                            maskedVtt,
+                            log,
+                            default);
+
+                        output.BlobUrl = blobUrl;
+                        log.LogInformation("Uploaded to Azure Storage: {BlobUrl}", blobUrl);
+                    }
+                    catch (Exception uploadEx)
+                    {
+                        log.LogWarning(uploadEx, "Failed to upload to Azure Storage, but continuing");
+                    }
+                }
+
+                output.Entities = new List<PiiEntityDto>();
+                output.MaskCategoriesEnv = null;
+                output.MaskCategoriesUsed = Array.Empty<string>();
+                output.MaskOffsets = new List<MaskOffsetDto>();
                 output.ProcessingTimeMs = start.ElapsedMilliseconds;
+
+                // デバッグ: 設定後のoutputを確認
+                log.LogInformation("Output.MaskedTranscript length after assignment: {Length}", output.MaskedTranscript?.Length ?? 0);
 
                 return output;
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Durable analyze actions failed for instance {InstanceId}", instanceId);
-                output.Error = ex.Message;;
+                log.LogError(ex, "VTT masking failed for instance {InstanceId}", instanceId);
+                output.Error = ex.Message;
+                output.MaskedTranscript = string.Empty; // 明示的に空文字列を設定
                 return output;
             }
         }
